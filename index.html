@@ -1,0 +1,294 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <title>Laberinto (Prueba)</title>
+  <style>
+    canvas { background: #ddd; display: block; margin: 0 auto; }
+    body { text-align: center; font-family: sans-serif; }
+
+    #touch-controls {
+        margin-top: 20px;
+        display: none;
+    }
+
+    #touch-controls button {
+        font-size: 24px;
+        margin: 5px;
+        padding: 10px 20px;
+    }
+  </style>
+</head>
+<body>
+  <h1>Laberinto (Prueba)</h1>
+  <canvas id="gameCanvas" width="450" height="300"></canvas>
+
+  <div id="touch-controls">
+      <button data-dir="up">↑</button>
+      <button data-dir="down">↓</button>
+      <button data-dir="left">←</button>
+      <button data-dir="right">→</button>
+  </div>
+  <script>
+    const canvas = document.getElementById('gameCanvas');
+    const ctx = canvas.getContext('2d');
+    const tileSize = 50;
+
+    let currentLevel = 0;
+    let lives = 1;
+    let gameOver = false;
+    let player = {x: 1, y: 3, score: 0};
+
+    const customImage = new Image();
+    customImage.src = 'levi.png'; // ← Reemplaza con la ruta de tu imagen
+
+    const levels = [
+      {
+        maze: [
+          [1,1,1,1,1,1,1,1,1],
+          [1,0,0,0,1,0,0,0,1],
+          [1,0,1,0,1,1,0,1,1],
+          [1,0,1,0,0,0,0,0,1],
+          [1,1,1,1,1,1,1,1,1]
+        ],
+        coins: [
+          {x: 1, y: 1, collected: false},
+          {x: 5, y: 1, collected: false},
+          {x: 7, y: 3, collected: false}
+        ],
+        enemies: [
+          {x: 6, y: 1, dir: -1, speed: 300, lastMove: 0}
+        ]
+      },
+      {
+        maze: [
+          [1,1,1,1,1,1,1,1,1],
+          [1,0,1,0,0,0,0,1,1],
+          [1,0,1,1,0,1,0,0,1],
+          [1,0,0,0,0,1,0,1,1],
+          [1,1,1,1,1,1,1,1,1]
+        ],
+        coins: [
+          {x: 1, y: 1, collected: false},
+          {x: 6, y: 3, collected: false}
+        ],
+        enemies: [
+          {x: 3, y: 1, dir: 1, speed: 500, lastMove: 0},
+          {x: 7, y: 2, dir: 1, speed: 500, lastMove: 0}
+        ]
+      },
+      {
+        maze: [
+          [1,1,1,1,1,1,1,1,1],
+          [1,0,0,0,1,0,0,0,1],
+          [1,0,1,0,1,0,1,1,1],
+          [1,0,1,0,0,0,0,0,1],
+          [1,1,1,1,1,1,1,1,1]
+        ],
+        coins: [
+          {x: 2, y: 1, collected: false},
+          {x: 6, y: 1, collected: false},
+          {x: 7, y: 3, collected: false}
+        ],
+        enemies: [
+          {x: 4, y: 3, dir: -1, speed: 500, lastMove: 0},
+          {x: 6, y: 1, dir: 1, speed: 500, lastMove: 0}
+        ]
+      },
+      {
+        maze: [
+          [1,1,1,1,1,1,1,1,1],
+          [1,0,0,0,0,0,0,0,1],
+          [1,1,0,1,1,0,1,0,1],
+          [1,0,0,0,0,0,0,0,1],
+          [1,1,1,1,1,1,1,1,1]
+        ],
+        coins: [
+          {x: 5, y: 2, collected: false},
+          {x: 7, y: 2, collected: false},
+          {x: 1, y: 1, collected: false}
+        ],
+        enemies: [
+          {x: 2, y: 2, dir: -1, speed: 250, lastMove: 0, pattern: 'vertical'},
+          {x: 5, y: 2, dir: 1, speed: 250, lastMove: 0, pattern: 'vertical'}
+        ]
+      }
+    ];
+
+    document.addEventListener('keydown', (e) => {
+      if (gameOver) return;
+      let dx = 0, dy = 0;
+      if (e.key === 'ArrowUp') dy = -1;
+      if (e.key === 'w') dy = -1;
+      if (e.key === 'ArrowDown') dy = 1;
+      if (e.key === 's') dy = 1;
+      if (e.key === 'ArrowLeft') dx = -1;
+      if (e.key === 'a') dx = -1;
+      if (e.key === 'ArrowRight') dx = 1;
+      if (e.key === 'd') dx = 1;
+
+      const level = levels[currentLevel];
+      const newX = player.x + dx;
+      const newY = player.y + dy;
+
+      if (level.maze[newY][newX] === 0) {
+        player.x = newX;
+        player.y = newY;
+        checkCoin(level);
+        checkLevelComplete(level);
+      }
+    });
+
+    // Mostrar controles táctiles si es móvil
+    if (/Mobi|Android|iPhone/i.test(navigator.userAgent)) {
+      document.getElementById("touch-controls").style.display = "block";
+    }
+
+    // Movimiento táctil
+    document.querySelectorAll("#touch-controls button").forEach(btn => {
+      btn.addEventListener("click", () => {
+        if (gameOver) return;
+        let dx = 0, dy = 0;
+        const dir = btn.getAttribute("data-dir");
+        if (dir === "up") dy = -1;
+        if (dir === "down") dy = 1;
+        if (dir === "left") dx = -1;
+        if (dir === "right") dx = 1;
+
+        const level = levels[currentLevel];
+        const newX = player.x + dx;
+        const newY = player.y + dy;
+
+        if (level.maze[newY][newX] === 0) {
+          player.x = newX;
+          player.y = newY;
+          checkCoin(level);
+          checkLevelComplete(level);
+        }
+      });
+    });
+
+
+    function checkCoin(level) {
+      level.coins.forEach(coin => {
+        if (!coin.collected && coin.x === player.x && coin.y === player.y) {
+          coin.collected = true;
+          player.score += 10;
+        }
+      });
+    }
+
+    function checkLevelComplete(level) {
+      if (level.coins.every(c => c.collected)) {
+        currentLevel++;
+        if (currentLevel >= levels.length) {
+          alert("¡Ganaste el juego!");
+          gameOver = true;
+        } else {
+          resetPlayer();
+        }
+      }
+    }
+
+    function resetPlayer() {
+      player.x = 1;
+      player.y = 3;
+    }
+
+    function moveEnemies(level) {
+        const now = Date.now();
+
+        level.enemies.forEach(enemy => {
+            const interval = enemy.speed || 500; //velocidad por defecto
+            if (!enemy.lastMove || now - enemy.lastMove >= interval) {
+                let nextX = enemy.x;
+                let nextY = enemy.y;
+
+                if (enemy.pattern === 'vertical'){
+                    nextY += enemy.dir;
+                    if (level.maze[nextY]?.[enemy.x] === 0) {
+                        enemy.y = nextY;
+                    } else {
+                        enemy.dir *= -1;
+                    }
+                }else{
+                    nextX += enemy.dir;
+                    if (level.maze[enemy.y][nextX] === 0) {
+                        enemy.x = nextX;
+                    } else {
+                        enemy.dir *= -1;
+                    }
+                }
+
+                enemy.lastMove = now;
+
+                if (enemy.x === player.x && enemy.y === player.y) {
+                lives--;
+                if (lives <= 0) {
+                    gameOver = true;
+                } else {
+                    resetPlayer();
+                }
+            }
+        }
+      });
+    }
+
+    function draw() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      const level = levels[currentLevel];
+
+      // Laberinto
+      for (let y = 0; y < level.maze.length; y++) {
+        for (let x = 0; x < level.maze[y].length; x++) {
+          ctx.fillStyle = level.maze[y][x] === 1 ? '#333' : '#eee';
+          ctx.fillRect(x * tileSize, y * tileSize, tileSize, tileSize);
+        }
+      }
+
+      // Monedas
+      level.coins.forEach(coin => {
+        if (!coin.collected) {
+          ctx.fillStyle = 'gold';
+          ctx.beginPath();
+          ctx.arc(coin.x * tileSize + 25, coin.y * tileSize + 25, 10, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      });
+
+      // Enemigos
+      level.enemies.forEach(enemy => {
+        ctx.fillStyle = 'red';
+        ctx.fillRect(enemy.x * tileSize + 10, enemy.y * tileSize + 10, 30, 30);
+      });
+
+      // Jugador
+      ctx.fillStyle = 'blue';
+      ctx.fillRect(player.x * tileSize + 10, player.y * tileSize + 10, 30, 30);
+
+      // HUD
+      ctx.fillStyle = 'black';
+      ctx.font = '16px Arial';
+      ctx.fillText("Puntos: " + player.score, 10, canvas.height - 10);
+      ctx.fillText("Vidas: " + lives, 150, canvas.height - 10);
+
+      if (!gameOver) {
+        moveEnemies(level);
+        requestAnimationFrame(draw);
+      } else {
+        const imgWidth = 300;
+        const imgHeight = 200;
+        const centerX = (canvas.width - imgWidth) / 2;
+        const centerY = (canvas.height - imgHeight) / 2 - 20;
+        ctx.drawImage(customImage, centerX, centerY, imgWidth, imgHeight);
+        ctx.fillStyle = 'black';
+        ctx.font = '24px Arial';
+        ctx.textAlign = 'center';
+        ctx.fillText("¡Has perdido!", canvas.width / 2, centerY + imgHeight + 40);
+      }
+    }
+
+    draw();
+  </script>
+</body>
+</html>
